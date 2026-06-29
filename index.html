@@ -172,6 +172,18 @@
   </div>
 
   <p class="note">Odd inch and fractional sizes are automatically rounded up to the next even inch (per NGP table rules). Minimum/maximum size limits are enforced per product.</p>
+
+  <div class="card" style="margin-top:20px">
+    <label style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:10px;display:block">Air Louvers &rarr; NGP Cross-Reference</label>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+      <input type="text" id="al-input" placeholder="Enter Air Louvers model (e.g. VLFEZ, 600A1, 1500A)"
+             style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:#0f1729;color:var(--text);font-size:1rem"
+             onkeydown="if(event.key==='Enter') doALLookup()" autocomplete="off" spellcheck="false">
+      <button onclick="doALLookup()" style="padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:1rem;cursor:pointer;font-weight:600;white-space:nowrap">Look Up</button>
+    </div>
+    <p class="note" style="margin-top:0">Covers Lite Kits and Louvers per the Air Louvers-to-NGP cross-over document. Partial matches supported.</p>
+    <div id="al-result"></div>
+  </div>
 </div>
 
 <script>
@@ -938,6 +950,85 @@ window.onerror = function(msg) {
 
 populateDropdown();
 onProductChange();
+
+// Air Louvers → NGP cross-reference data (per AIR LOUVERS to NGP CROSS-OVER.docx)
+const AL_MAP = [
+  // Lite Kits
+  { al: 'VLF',           ngp: 'L-GLF100-TB',                             cat: 'Lite Kit' },
+  { al: 'VLF-G',         ngp: 'L-GLF100 X G',                            cat: 'Lite Kit' },
+  { al: 'VLFIG',         ngp: 'L-GLF100-SP-TB',                          cat: 'Lite Kit' },
+  { al: 'VLF-PVC',       ngp: 'L-VGLF Series',                           cat: 'Lite Kit' },
+  { al: 'VLF-R-12,18,24',ngp: 'LO-FP-12, 18 / L-FRA100-RD 12, 18, 24', cat: 'Lite Kit' },
+  { al: 'VLFEZ',         ngp: 'LO-PRO / L-FRA100',                       cat: 'Lite Kit' },
+  { al: 'VLFEZHRCPAK',   ngp: 'STORM-PRO-HR',                            cat: 'Lite Kit' },
+  { al: 'VLFEZIG',       ngp: 'LO-PRO-IS / L-FRA100-SP',                 cat: 'Lite Kit' },
+  { al: 'VLFIGHRCPAK',   ngp: 'STORM-PRO-HR',                            cat: 'Lite Kit' },
+  { al: 'VLFS10',        ngp: 'SG-10',                                   cat: 'Lite Kit' },
+  { al: 'VLFSG',         ngp: 'L-SG100',                                 cat: 'Lite Kit' },
+  { al: 'VSL',           ngp: 'LO-PRO / L-FRA100',                       cat: 'Lite Kit' },
+  { al: 'VSLH',          ngp: 'LO-PRO / L-FRA100',                       cat: 'Lite Kit' },
+  { al: 'VSLR-12,18,24', ngp: 'LO-FP-12, 18 / L-FRA100-RD 12, 18, 24', cat: 'Lite Kit' },
+  { al: 'VSL-S',         ngp: 'L-CVFM-SS',                               cat: 'Lite Kit' },
+  { al: 'VSIG',          ngp: 'LO-PRO-IS / L-FRA100-SP',                 cat: 'Lite Kit' },
+  // Louvers
+  { al: '600A1',         ngp: 'L-700-RX / AFDL',                         cat: 'Louver' },
+  { al: '600SERIES',     ngp: 'L-700 SERIES',                            cat: 'Louver' },
+  { al: '700A',          ngp: 'FDLS',                                    cat: 'Louver' },
+  { al: '700A-S',        ngp: 'FDLS-316SS',                              cat: 'Louver' },
+  { al: '800A1',         ngp: 'L-700-RX / AFDL',                         cat: 'Louver' },
+  { al: '800A-S',        ngp: 'L-700-RX-SS',                             cat: 'Louver' },
+  { al: '800SERIES',     ngp: 'L-700 Series',                            cat: 'Louver' },
+  { al: '1100A',         ngp: 'L-1800',                                  cat: 'Louver' },
+  { al: '1300SERIES',    ngp: 'L-A700 Series',                           cat: 'Louver' },
+  { al: '1500A',         ngp: 'PLSL',                                    cat: 'Louver' },
+  { al: '1500A-HR',      ngp: 'L-VRSG-2-TB',                             cat: 'Louver' },
+  { al: '1900A',         ngp: 'L-1900',                                  cat: 'Louver' },
+  { al: '1900ASG',       ngp: 'FLDL-SG1',                               cat: 'Louver' },
+];
+
+function doALLookup() {
+  const raw = document.getElementById('al-input').value.trim();
+  const resultDiv = document.getElementById('al-result');
+  if (!raw) { resultDiv.innerHTML = ''; return; }
+
+  // Normalize: uppercase, remove all spaces
+  const q = raw.toUpperCase().replace(/\s+/g, '');
+
+  // Score each entry: exact > starts-with > contains
+  const scored = AL_MAP.map(e => {
+    const key = e.al.toUpperCase().replace(/\s+/g, '');
+    if (key === q) return { e, score: 3 };
+    if (key.startsWith(q) || q.startsWith(key)) return { e, score: 2 };
+    if (key.includes(q) || q.includes(key)) return { e, score: 1 };
+    return null;
+  }).filter(Boolean).sort((a, b) => b.score - a.score);
+
+  if (!scored.length) {
+    resultDiv.innerHTML = `
+      <div class="result-card error" style="margin-top:12px">
+        <div class="result-label">Not Found</div>
+        <div class="result-value">Air Louvers model "<strong>${raw.toUpperCase()}</strong>" not found in the cross-reference.</div>
+      </div>`;
+    return;
+  }
+
+  const rows = scored.map(({ e }) => `
+    <tr>
+      <td style="font-weight:600">${e.al}</td>
+      <td class="ngp-cell">${e.ngp}</td>
+      <td style="font-size:0.85rem;opacity:0.8">${e.cat}</td>
+    </tr>`).join('');
+
+  resultDiv.innerHTML = `
+    <table style="margin-top:12px">
+      <thead><tr>
+        <th>Air Louvers Model</th>
+        <th>NGP Equivalent</th>
+        <th>Category</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
 </script>
 </body>
 </html>
