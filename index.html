@@ -994,14 +994,18 @@ function doALLookup() {
   // Normalize: uppercase, remove all spaces
   const q = raw.toUpperCase().replace(/\s+/g, '');
 
-  // Score each entry: exact > starts-with > contains
-  const scored = AL_MAP.map(e => {
-    const key = e.al.toUpperCase().replace(/\s+/g, '');
-    if (key === q) return { e, score: 3 };
-    if (key.startsWith(q) || q.startsWith(key)) return { e, score: 2 };
-    if (key.includes(q) || q.includes(key)) return { e, score: 1 };
-    return null;
-  }).filter(Boolean).sort((a, b) => b.score - a.score);
+  // Exact match takes priority — if found, return only exact matches
+  const exact = AL_MAP.filter(e => e.al.toUpperCase().replace(/\s+/g, '') === q);
+  if (exact.length) {
+    var scored = exact.map(e => ({ e }));
+  } else {
+    var scored = AL_MAP.map(e => {
+      const key = e.al.toUpperCase().replace(/\s+/g, '');
+      if (key.startsWith(q)) return { e, score: 2 };
+      if (key.includes(q)) return { e, score: 1 };
+      return null;
+    }).filter(Boolean).sort((a, b) => b.score - a.score);
+  }
 
   if (!scored.length) {
     resultDiv.innerHTML = `
