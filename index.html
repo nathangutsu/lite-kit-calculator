@@ -165,6 +165,11 @@
       </div>
     </div>
 
+    <div id="stc-row" style="display:none;align-items:center;gap:8px;margin-bottom:16px">
+      <input type="checkbox" id="stc-checkbox" onchange="calculate()" style="width:auto;margin:0">
+      <label for="stc-checkbox" style="margin:0;font-size:0.9rem;color:var(--text);font-weight:600">STC Option (+$35/sq. ft., added to list price)</label>
+    </div>
+
     <label for="multiplier-input">Discount Multiplier (optional, e.g. 0.40 for net price)</label>
     <input type="number" id="multiplier-input" min="0" max="1" step="0.01" placeholder="e.g. 0.40" oninput="calculate()">
 
@@ -721,6 +726,14 @@ function onProductChange() {
     finishSel.innerHTML = '';
   }
 
+  const stcRow = document.getElementById('stc-row');
+  if (product.category === 'Lite Kits') {
+    stcRow.style.display = 'flex';
+  } else {
+    stcRow.style.display = 'none';
+    document.getElementById('stc-checkbox').checked = false;
+  }
+
   const sizeRow = document.getElementById('size-row');
   const sizeSel = document.getElementById('size-select');
   const dimsRow = document.getElementById('dims-row');
@@ -753,6 +766,11 @@ function snapToTableValue(value, sortedList) {
   return null; // exceeds max
 }
 
+// STC Option add-on: $35 per sq. ft., square footage rounded up to next whole sq. ft.
+function stcCost(width, height) {
+  return Math.ceil((width * height) / 144) * 35;
+}
+
 function calculate() {
   if (!activeProductKey) {
     document.getElementById('result').innerHTML = '';
@@ -770,7 +788,18 @@ function calculate() {
     const sizeIdx = parseInt(document.getElementById('size-select').value, 10) || 0;
     const sizeOpt = product.fixedSizes[sizeIdx];
     if (!sizeOpt) { resultDiv.innerHTML = ''; return; }
-    const listPrice = sizeOpt.price;
+    let listPrice = sizeOpt.price;
+    const stcChecked = product.category === 'Lite Kits' && document.getElementById('stc-checkbox').checked;
+    let stcRow = '';
+    if (stcChecked) {
+      const stc = stcCost(sizeOpt.width, sizeOpt.height);
+      listPrice = +(listPrice + stc).toFixed(2);
+      stcRow = `
+        <div class="result-row">
+          <span class="result-label">STC Option (+$35/sq. ft.)</span>
+          <span class="result-value" style="font-size:1rem">$${stc.toFixed(2)}</span>
+        </div>`;
+    }
     let netRow = '';
     if (multiplier) {
       const net = (listPrice * multiplier).toFixed(2);
@@ -786,6 +815,7 @@ function calculate() {
           <span class="result-label">Size</span>
           <span class="result-value" style="font-size:1.1rem">${sizeOpt.label}</span>
         </div>
+        ${stcRow}
         <div class="result-row">
           <span class="result-label">List Price</span>
           <span class="result-value">$${listPrice.toFixed(2)}</span>
@@ -914,6 +944,18 @@ function calculate() {
     ? `<div class="note">Requested ${widthRaw}&Prime; &times; ${heightRaw}&Prime; rounded up to next available size: <strong>${widthSnapped}&Prime; &times; ${heightSnapped}&Prime;</strong>.</div>`
     : '';
 
+  const stcChecked = product.category === 'Lite Kits' && document.getElementById('stc-checkbox').checked;
+  let stcRow = '';
+  if (stcChecked) {
+    const stc = stcCost(widthSnapped, heightSnapped);
+    listPrice = +(listPrice + stc).toFixed(2);
+    stcRow = `
+      <div class="result-row">
+        <span class="result-label">STC Option (+$35/sq. ft.)</span>
+        <span class="result-value" style="font-size:1rem">$${stc.toFixed(2)}</span>
+      </div>`;
+  }
+
   let netRow = '';
   if (multiplier) {
     const net = (listPrice * multiplier).toFixed(2);
@@ -933,6 +975,7 @@ function calculate() {
         <span class="result-label">Size Used</span>
         <span class="result-value" style="font-size:1.1rem">${widthSnapped}&Prime; W &times; ${heightSnapped}&Prime; H</span>
       </div>
+      ${stcRow}
       <div class="result-row">
         <span class="result-label">List Price</span>
         <span class="result-value">$${listPrice.toFixed(2)}</span>
