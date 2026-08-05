@@ -171,7 +171,7 @@
     </div>
 
     <label for="multiplier-input">Discount Multiplier (optional, e.g. 0.40 for net price)</label>
-    <input type="number" id="multiplier-input" min="0" max="1" step="0.01" placeholder="e.g. 0.40" oninput="calculate()">
+    <input type="number" id="multiplier-input" min="0" max="1" step="0.01" placeholder="e.g. 0.40" oninput="calculate(); renderLineItems();">
 
     <div id="result" class="result"></div>
   </div>
@@ -683,6 +683,15 @@ let activeProductKey = null;
 let lineItems = [];
 let currentLineItem = null;
 
+function getCurrentMultiplier() {
+  const raw = parseFloat(document.getElementById('multiplier-input').value);
+  return (!isNaN(raw) && raw > 0 && raw <= 1) ? raw : null;
+}
+
+function lineItemUnitPrice(item, multiplier) {
+  return multiplier ? +(item.listPrice * multiplier).toFixed(2) : item.listPrice;
+}
+
 function renderLineItems() {
   const listDiv = document.getElementById('total-list');
   const emptyNote = document.getElementById('total-empty');
@@ -692,25 +701,30 @@ function renderLineItems() {
   const shippingSpan = document.getElementById('shipping-value');
   const grandTotalSpan = document.getElementById('grand-total');
 
+  const multiplier = getCurrentMultiplier();
+
   if (lineItems.length === 0) {
     listDiv.innerHTML = '';
     emptyNote.style.display = '';
   } else {
     emptyNote.style.display = 'none';
-    listDiv.innerHTML = lineItems.map((item, idx) => `
+    listDiv.innerHTML = lineItems.map((item, idx) => {
+      const unitPrice = lineItemUnitPrice(item, multiplier);
+      return `
       <div class="result-row">
-        <span class="result-label" style="max-width:45%">${item.description}<br>$${item.unitPrice.toFixed(2)} each</span>
+        <span class="result-label" style="max-width:45%">${item.description}<br>$${unitPrice.toFixed(2)} each${multiplier ? ` (net &times;${multiplier})` : ''}</span>
         <span class="result-value" style="font-size:1rem;display:flex;align-items:center;gap:10px">
           <input type="number" min="1" step="1" value="${item.qty}" onchange="updateQty(${idx}, this.value)"
             style="width:60px;padding:6px 8px;margin:0;font-size:0.9rem;text-align:center">
-          $${(item.unitPrice * item.qty).toFixed(2)}
+          $${(unitPrice * item.qty).toFixed(2)}
           <button onclick="removeLineItem(${idx})" title="Remove"
             style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:0.9rem;line-height:1">&times;</button>
         </span>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
-  const subtotal = lineItems.reduce((sum, item) => sum + item.unitPrice * item.qty, 0);
+  const subtotal = lineItems.reduce((sum, item) => sum + lineItemUnitPrice(item, multiplier) * item.qty, 0);
   subtotalRow.style.display = lineItems.length ? '' : 'none';
   subtotalSpan.textContent = `$${subtotal.toFixed(2)}`;
 
@@ -766,16 +780,17 @@ function decodeEntities(html) {
 function buildEmailText() {
   if (lineItems.length === 0) return 'No items added yet.';
 
+  const multiplier = getCurrentMultiplier();
   const lines = [];
   lineItems.forEach((item, idx) => {
-    const unitPrice = item.unitPrice.toFixed(2);
-    const lineTotal = (item.unitPrice * item.qty).toFixed(2);
+    const unitPrice = lineItemUnitPrice(item, multiplier);
+    const lineTotal = (unitPrice * item.qty).toFixed(2);
     lines.push(`${idx + 1}. ${decodeEntities(item.description)}`);
-    lines.push(`   Qty: ${item.qty} x $${unitPrice} = $${lineTotal}`);
+    lines.push(`   Qty: ${item.qty} x $${unitPrice.toFixed(2)} = $${lineTotal}`);
     lines.push('');
   });
 
-  const subtotal = lineItems.reduce((sum, item) => sum + item.unitPrice * item.qty, 0);
+  const subtotal = lineItems.reduce((sum, item) => sum + lineItemUnitPrice(item, multiplier) * item.qty, 0);
   lines.push(`Subtotal: $${subtotal.toFixed(2)}`);
 
   if (document.getElementById('shipping-checkbox').checked) {
@@ -968,10 +983,8 @@ function calculate() {
         </div>`;
     }
     let netRow = '';
-    let finalPrice = listPrice;
     if (multiplier) {
       const net = (listPrice * multiplier).toFixed(2);
-      finalPrice = +net;
       netRow = `
         <div class="result-row">
           <span class="result-label">Net Price (&times;${multiplier})</span>
@@ -980,8 +993,8 @@ function calculate() {
     }
 
     currentLineItem = {
-      description: `${product.label} &mdash; ${sizeOpt.label}${stcChecked ? ' + STC' : ''}${multiplier ? ` (net &times;${multiplier})` : ''}`,
-      unitPrice: finalPrice
+      description: `${product.label} &mdash; ${sizeOpt.label}${stcChecked ? ' + STC' : ''}`,
+      listPrice: listPrice
     };
 
     resultDiv.innerHTML = `
@@ -1133,10 +1146,8 @@ function calculate() {
   }
 
   let netRow = '';
-  let finalPrice = listPrice;
   if (multiplier) {
     const net = (listPrice * multiplier).toFixed(2);
-    finalPrice = +net;
     netRow = `
       <div class="result-row">
         <span class="result-label">Net Price (&times;${multiplier})</span>
@@ -1150,11 +1161,10 @@ function calculate() {
   if (finish && finish.key !== 'standard') descBits.push(finish.label);
   descBits.push(`${widthSnapped}&Prime; &times; ${heightSnapped}&Prime;`);
   if (stcChecked) descBits.push('STC');
-  if (multiplier) descBits.push(`net &times;${multiplier}`);
 
   currentLineItem = {
     description: descBits.join(' &mdash; '),
-    unitPrice: finalPrice
+    listPrice: listPrice
   };
 
   resultDiv.innerHTML = `
