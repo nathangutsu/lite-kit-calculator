@@ -179,6 +179,40 @@
   <p class="note">Odd inch and fractional sizes are automatically rounded up to the next even inch (per NGP table rules). Minimum/maximum size limits are enforced per product.</p>
 
   <div class="card" style="margin-top:20px">
+    <label style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:10px;display:block">Running Total</label>
+    <div id="total-list"></div>
+    <div id="total-empty" class="note" style="margin-top:0">No items added yet. Calculate an item above, then click &ldquo;Add to Running Total&rdquo;.</div>
+    <div class="result-row" id="subtotal-row" style="display:none">
+      <span class="result-label">Subtotal</span>
+      <span class="result-value" style="font-size:1rem" id="subtotal-value">$0.00</span>
+    </div>
+    <div class="result-row" style="border-top:2px solid var(--border);margin-top:4px;padding-top:14px">
+      <span class="result-label" style="font-size:1rem;font-weight:700;color:var(--text)">Grand Total</span>
+      <span class="result-value net" id="grand-total">$0.00</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin:14px 0 0">
+      <input type="checkbox" id="shipping-checkbox" onchange="renderLineItems()" style="width:auto;margin:0">
+      <label for="shipping-checkbox" style="margin:0;font-size:0.9rem;color:var(--text);font-weight:600">Shipping Estimate</label>
+    </div>
+    <div class="result-row" id="shipping-row" style="display:none">
+      <span class="result-label">Shipping Estimate</span>
+      <span class="result-value" style="font-size:1rem" id="shipping-value">$0.00</span>
+    </div>
+    <button onclick="clearLineItems()" style="margin-top:14px;padding:8px 16px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:0.85rem;cursor:pointer">Clear All</button>
+
+    <div style="margin-top:18px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;opacity:0.6">
+        <input type="checkbox" id="ash-team-checkbox" onchange="renderEmailText()" style="width:auto;margin:0;transform:scale(0.85)">
+        <label for="ash-team-checkbox" style="margin:0;font-size:0.7rem;color:var(--muted);font-weight:400;cursor:pointer">ASH Team</label>
+      </div>
+      <div id="ash-team-output" style="display:none;margin-top:10px">
+        <textarea id="ash-team-text" readonly rows="10" style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:0.8rem;background:#0f1729;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;resize:vertical"></textarea>
+        <button onclick="copyEmailText()" style="padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:0.8rem;cursor:pointer">Copy to Clipboard</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:20px">
     <label style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:10px;display:block">Air Louvers &rarr; NGP Cross-Reference</label>
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
       <input type="text" id="al-input" placeholder="Enter Air Louvers model (e.g. VLFEZ, 600A1, 1500A)"
@@ -646,6 +680,138 @@ PRODUCTS.lfra100_firelite.table = PRODUCTS.lfra100_pyranf.table;
 PRODUCTS.firelite_glass.table = PRODUCTS.pyranf_glass.table;
 
 let activeProductKey = null;
+let lineItems = [];
+let currentLineItem = null;
+
+function renderLineItems() {
+  const listDiv = document.getElementById('total-list');
+  const emptyNote = document.getElementById('total-empty');
+  const subtotalRow = document.getElementById('subtotal-row');
+  const subtotalSpan = document.getElementById('subtotal-value');
+  const shippingRow = document.getElementById('shipping-row');
+  const shippingSpan = document.getElementById('shipping-value');
+  const grandTotalSpan = document.getElementById('grand-total');
+
+  if (lineItems.length === 0) {
+    listDiv.innerHTML = '';
+    emptyNote.style.display = '';
+  } else {
+    emptyNote.style.display = 'none';
+    listDiv.innerHTML = lineItems.map((item, idx) => `
+      <div class="result-row">
+        <span class="result-label" style="max-width:45%">${item.description}<br>$${item.unitPrice.toFixed(2)} each</span>
+        <span class="result-value" style="font-size:1rem;display:flex;align-items:center;gap:10px">
+          <input type="number" min="1" step="1" value="${item.qty}" onchange="updateQty(${idx}, this.value)"
+            style="width:60px;padding:6px 8px;margin:0;font-size:0.9rem;text-align:center">
+          $${(item.unitPrice * item.qty).toFixed(2)}
+          <button onclick="removeLineItem(${idx})" title="Remove"
+            style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:0.9rem;line-height:1">&times;</button>
+        </span>
+      </div>`).join('');
+  }
+
+  const subtotal = lineItems.reduce((sum, item) => sum + item.unitPrice * item.qty, 0);
+  subtotalRow.style.display = lineItems.length ? '' : 'none';
+  subtotalSpan.textContent = `$${subtotal.toFixed(2)}`;
+
+  const shippingChecked = document.getElementById('shipping-checkbox').checked;
+  let shipping = 0;
+  if (shippingChecked) {
+    shippingRow.style.display = '';
+    if (subtotal >= 2000) {
+      shipping = 0;
+      shippingSpan.textContent = `Order Meets PP'D Freight — $0.00`;
+    } else {
+      shipping = Math.max(30, Math.round(subtotal * 0.10));
+      shippingSpan.textContent = `$${shipping.toFixed(2)}`;
+    }
+  } else {
+    shippingRow.style.display = 'none';
+  }
+
+  const grandTotal = subtotal;
+  grandTotalSpan.textContent = `$${grandTotal.toFixed(2)}`;
+
+  renderEmailText();
+}
+
+function addLineItem() {
+  if (!currentLineItem) return;
+  lineItems.push({ ...currentLineItem, qty: 1 });
+  renderLineItems();
+}
+
+function updateQty(idx, value) {
+  const qty = Math.max(1, parseInt(value, 10) || 1);
+  lineItems[idx].qty = qty;
+  renderLineItems();
+}
+
+function removeLineItem(idx) {
+  lineItems.splice(idx, 1);
+  renderLineItems();
+}
+
+function clearLineItems() {
+  lineItems = [];
+  renderLineItems();
+}
+
+function decodeEntities(html) {
+  const el = document.createElement('textarea');
+  el.innerHTML = html;
+  return el.value;
+}
+
+function buildEmailText() {
+  if (lineItems.length === 0) return 'No items added yet.';
+
+  const lines = [];
+  lineItems.forEach((item, idx) => {
+    const unitPrice = item.unitPrice.toFixed(2);
+    const lineTotal = (item.unitPrice * item.qty).toFixed(2);
+    lines.push(`${idx + 1}. ${decodeEntities(item.description)}`);
+    lines.push(`   Qty: ${item.qty} x $${unitPrice} = $${lineTotal}`);
+    lines.push('');
+  });
+
+  const subtotal = lineItems.reduce((sum, item) => sum + item.unitPrice * item.qty, 0);
+  lines.push(`Subtotal: $${subtotal.toFixed(2)}`);
+
+  if (document.getElementById('shipping-checkbox').checked) {
+    if (subtotal >= 2000) {
+      lines.push(`Shipping Estimate: Order Meets PP'D Freight — $0.00`);
+    } else {
+      const shipping = Math.max(30, Math.round(subtotal * 0.10));
+      lines.push(`Shipping Estimate: $${shipping.toFixed(2)}`);
+    }
+  }
+
+  lines.push(`Grand Total: $${subtotal.toFixed(2)}`);
+  return lines.join('\n');
+}
+
+function renderEmailText() {
+  const outputDiv = document.getElementById('ash-team-output');
+  const textarea = document.getElementById('ash-team-text');
+  if (!document.getElementById('ash-team-checkbox').checked) {
+    outputDiv.style.display = 'none';
+    return;
+  }
+  outputDiv.style.display = '';
+  textarea.value = buildEmailText();
+}
+
+function copyEmailText() {
+  const textarea = document.getElementById('ash-team-text');
+  textarea.select();
+  textarea.setSelectionRange(0, 99999);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(textarea.value).catch(() => document.execCommand('copy'));
+  } else {
+    document.execCommand('copy');
+  }
+}
 
 const CATEGORY_SELECTS = {
   'Lite Kits': 'litekit-select',
@@ -772,6 +938,7 @@ function stcCost(width, height) {
 }
 
 function calculate() {
+  currentLineItem = null;
   if (!activeProductKey) {
     document.getElementById('result').innerHTML = '';
     return;
@@ -801,14 +968,22 @@ function calculate() {
         </div>`;
     }
     let netRow = '';
+    let finalPrice = listPrice;
     if (multiplier) {
       const net = (listPrice * multiplier).toFixed(2);
+      finalPrice = +net;
       netRow = `
         <div class="result-row">
           <span class="result-label">Net Price (&times;${multiplier})</span>
           <span class="result-value net">$${net}</span>
         </div>`;
     }
+
+    currentLineItem = {
+      description: `${product.label} &mdash; ${sizeOpt.label}${stcChecked ? ' + STC' : ''}${multiplier ? ` (net &times;${multiplier})` : ''}`,
+      unitPrice: finalPrice
+    };
+
     resultDiv.innerHTML = `
       <div class="result-card">
         <div class="result-row">
@@ -822,6 +997,7 @@ function calculate() {
         </div>
         ${netRow}
       </div>
+      <button onclick="addLineItem()" style="margin-top:12px;padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:0.95rem;cursor:pointer;font-weight:600">+ Add to Running Total</button>
       <p class="disclaimer" style="margin-top:8px">Fixed catalog size — no custom sizes available for this product.</p>`;
     return;
   }
@@ -957,14 +1133,29 @@ function calculate() {
   }
 
   let netRow = '';
+  let finalPrice = listPrice;
   if (multiplier) {
     const net = (listPrice * multiplier).toFixed(2);
+    finalPrice = +net;
     netRow = `
       <div class="result-row">
         <span class="result-label">Net Price (&times;${multiplier})</span>
         <span class="result-value net">$${net}</span>
       </div>`;
   }
+
+  const descBits = [product.label];
+  if (variant) descBits.push(variant.label);
+  if (material) descBits.push(material.label);
+  if (finish && finish.key !== 'standard') descBits.push(finish.label);
+  descBits.push(`${widthSnapped}&Prime; &times; ${heightSnapped}&Prime;`);
+  if (stcChecked) descBits.push('STC');
+  if (multiplier) descBits.push(`net &times;${multiplier}`);
+
+  currentLineItem = {
+    description: descBits.join(' &mdash; '),
+    unitPrice: finalPrice
+  };
 
   resultDiv.innerHTML = `
     <div class="result-card">
@@ -982,6 +1173,7 @@ function calculate() {
       </div>
       ${netRow}
     </div>
+    <button onclick="addLineItem()" style="margin-top:12px;padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:0.95rem;cursor:pointer;font-weight:600">+ Add to Running Total</button>
     ${roundedNote}
     ${fractionalNote}`;
 }
@@ -993,6 +1185,7 @@ window.onerror = function(msg) {
 
 populateDropdown();
 onProductChange();
+renderLineItems();
 
 // Air Louvers → NGP cross-reference data (per AIR LOUVERS to NGP CROSS-OVER.docx)
 const AL_MAP = [
