@@ -792,17 +792,17 @@ function buildEmailText() {
 
   const subtotal = lineItems.reduce((sum, item) => sum + lineItemUnitPrice(item, multiplier) * item.qty, 0);
   lines.push(`Subtotal: $${subtotal.toFixed(2)}`);
+  lines.push(`Grand Total: $${subtotal.toFixed(2)}`);
 
   if (document.getElementById('shipping-checkbox').checked) {
+    lines.push('');
     if (subtotal >= 2000) {
-      lines.push(`Shipping Estimate: Order Meets PP'D Freight — $0.00`);
+      lines.push(`Shipping Estimate (separate, not included above): Order Meets PP'D Freight — $0.00`);
     } else {
       const shipping = Math.max(30, Math.round(subtotal * 0.10));
-      lines.push(`Shipping Estimate: $${shipping.toFixed(2)}`);
+      lines.push(`Shipping Estimate (separate, not included above): $${shipping.toFixed(2)}`);
     }
   }
-
-  lines.push(`Grand Total: $${subtotal.toFixed(2)}`);
   return lines.join('\n');
 }
 
