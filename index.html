@@ -785,7 +785,7 @@ function buildEmailText() {
   lineItems.forEach((item, idx) => {
     const unitPrice = lineItemUnitPrice(item, multiplier);
     const lineTotal = (unitPrice * item.qty).toFixed(2);
-    lines.push(`${idx + 1}. ${decodeEntities(item.description)}`);
+    lines.push(`(Line ${idx + 1}) ${decodeEntities(item.description)}`);
     lines.push(`   Qty: ${item.qty} x $${unitPrice.toFixed(2)} = $${lineTotal}`);
     lines.push('');
   });
