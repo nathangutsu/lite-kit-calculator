@@ -186,10 +186,6 @@
       <span class="result-label">Subtotal</span>
       <span class="result-value" style="font-size:1rem" id="subtotal-value">$0.00</span>
     </div>
-    <div class="result-row" style="border-top:2px solid var(--border);margin-top:4px;padding-top:14px">
-      <span class="result-label" style="font-size:1rem;font-weight:700;color:var(--text)">Grand Total</span>
-      <span class="result-value net" id="grand-total">$0.00</span>
-    </div>
     <div style="display:flex;align-items:center;gap:8px;margin:14px 0 0">
       <input type="checkbox" id="shipping-checkbox" onchange="renderLineItems()" style="width:auto;margin:0">
       <label for="shipping-checkbox" style="margin:0;font-size:0.9rem;color:var(--text);font-weight:600">Shipping Estimate</label>
@@ -197,6 +193,10 @@
     <div class="result-row" id="shipping-row" style="display:none">
       <span class="result-label">Shipping Estimate</span>
       <span class="result-value" style="font-size:1rem" id="shipping-value">$0.00</span>
+    </div>
+    <div class="result-row" style="border-top:2px solid var(--border);margin-top:4px;padding-top:14px">
+      <span class="result-label" style="font-size:1rem;font-weight:700;color:var(--text)">Grand Total</span>
+      <span class="result-value net" id="grand-total">$0.00</span>
     </div>
     <button onclick="clearLineItems()" style="margin-top:14px;padding:8px 16px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:0.85rem;cursor:pointer">Clear All</button>
 
@@ -743,7 +743,7 @@ function renderLineItems() {
     shippingRow.style.display = 'none';
   }
 
-  const grandTotal = subtotal;
+  const grandTotal = subtotal + shipping;
   grandTotalSpan.textContent = `$${grandTotal.toFixed(2)}`;
 
   renderEmailText();
@@ -792,17 +792,18 @@ function buildEmailText() {
 
   const subtotal = lineItems.reduce((sum, item) => sum + lineItemUnitPrice(item, multiplier) * item.qty, 0);
   lines.push(`Subtotal: $${subtotal.toFixed(2)}`);
-  lines.push(`Grand Total: $${subtotal.toFixed(2)}`);
 
+  let shipping = 0;
   if (document.getElementById('shipping-checkbox').checked) {
-    lines.push('');
     if (subtotal >= 2000) {
-      lines.push(`Shipping Estimate (separate, not included above): Order Meets PP'D Freight — $0.00`);
+      lines.push(`Shipping Estimate: Order Meets PP'D Freight — $0.00`);
     } else {
-      const shipping = Math.max(30, Math.round(subtotal * 0.10));
-      lines.push(`Shipping Estimate (separate, not included above): $${shipping.toFixed(2)}`);
+      shipping = Math.max(30, Math.round(subtotal * 0.10));
+      lines.push(`Shipping Estimate: $${shipping.toFixed(2)}`);
     }
   }
+
+  lines.push(`Grand Total: $${(subtotal + shipping).toFixed(2)}`);
   return lines.join('\n');
 }
 
