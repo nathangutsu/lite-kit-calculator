@@ -1268,7 +1268,7 @@ function calculate() {
   if (variant) descBits.push(variant.label);
   if (material) descBits.push(material.label);
   if (finish && finish.key !== 'standard') descBits.push(finish.label);
-  descBits.push(`${widthSnapped}&Prime; &times; ${heightSnapped}&Prime;`);
+  descBits.push(`${widthRaw}&Prime; &times; ${heightRaw}&Prime;`);
   if (stcChecked) descBits.push('STC');
   if (shipping3dayChecked) descBits.push('3-Day Shipping');
 
