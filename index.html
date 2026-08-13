@@ -827,6 +827,7 @@ function buildEmailText() {
     const unitPrice = lineItemUnitPrice(item, multiplier);
     const lineTotal = (unitPrice * item.qty).toFixed(2);
     lines.push(`(Line ${idx + 1}) ${decodeEntities(item.description)}`);
+    lines.push(`   List Price: $${item.listPrice.toFixed(2)} each`);
     lines.push(`   Qty: ${item.qty} x $${unitPrice.toFixed(2)} = $${lineTotal}`);
     lines.push('');
   });
@@ -845,6 +846,12 @@ function buildEmailText() {
   }
 
   lines.push(`Grand Total: $${(subtotal + shipping).toFixed(2)}`);
+
+  lines.push('');
+  lines.push('Not NGP company quote.');
+  lines.push("Based on today's date");
+  lines.push('Based on your current buy program and freight terms');
+
   return lines.join('\n');
 }
 
