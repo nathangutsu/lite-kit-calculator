@@ -175,6 +175,11 @@
       <label for="shipping3day-checkbox" style="margin:0;font-size:0.9rem;color:var(--text);font-weight:600">3-Day Shipping (+25%, added to list price)</label>
     </div>
 
+    <div id="torx-row" style="display:none;align-items:center;gap:8px;margin-bottom:16px">
+      <input type="checkbox" id="torx-checkbox" onchange="calculate()" style="width:auto;margin:0">
+      <label for="torx-checkbox" style="margin:0;font-size:0.9rem;color:var(--text);font-weight:600">Torx Security Screws (+$20 up to 24"x24", +$40 over)</label>
+    </div>
+
     <label for="multiplier-input">Discount Multiplier (optional, e.g. 0.40 for net price)</label>
     <input type="number" id="multiplier-input" min="0" max="1" step="0.01" placeholder="e.g. 0.40" oninput="calculate(); renderLineItems();">
 
@@ -199,6 +204,7 @@
       <span class="result-label">Shipping Estimate</span>
       <span class="result-value" style="font-size:1rem" id="shipping-value">$0.00</span>
     </div>
+    <div id="shipping-note" class="note" style="display:none;margin-top:0"></div>
     <div class="result-row" style="border-top:2px solid var(--border);margin-top:4px;padding-top:14px">
       <span class="result-label" style="font-size:1rem;font-weight:700;color:var(--text)">Grand Total</span>
       <span class="result-value net" id="grand-total">$0.00</span>
@@ -697,6 +703,12 @@ const PRODUCTS = {
       { label: '24" Diameter', width: 24, height: 24, price: 977 }
     ]
   },
+  insulated_tempered_1in: {
+    label: 'Insulated Tempered Glass - 1" Thick (p.68)',
+    category: 'Glass',
+    minW: 1, maxW: 81, minH: 11, maxH: 141,
+    sqftPricing: { flatUpTo: 3, flatPrice: 330, rate: 110 }
+  },
   ssd: {
     label: 'SSD / SG-10-SSD / LO-PRO-SSD Security Sliding Door Vision Lite Kit (p.42)',
     category: 'Lite Kits',
@@ -732,6 +744,25 @@ function getCurrentMultiplier() {
 
 function lineItemUnitPrice(item, multiplier) {
   return multiplier ? +(item.listPrice * multiplier).toFixed(2) : item.listPrice;
+}
+
+// Shipping Estimate rules:
+// - Prepaid freight: subtotal >= $2500 waives shipping entirely
+// - Otherwise: 10% of subtotal, $40 minimum
+// - +$150 if any item's width or height exceeds 94"
+// - +$150 if any Lite Kit / Louver item's width or height exceeds 60"
+function computeShippingEstimate(subtotal) {
+  if (subtotal >= 2500) {
+    return { amount: 0, freight: true, oversizeGeneral: false, oversizeLiteKitLouver: false };
+  }
+  let amount = Math.max(40, Math.round(subtotal * 0.10));
+  const oversizeGeneral = lineItems.some(item => item.width > 94 || item.height > 94);
+  const oversizeLiteKitLouver = lineItems.some(item =>
+    (item.category === 'Lite Kits' || item.category === 'Louvers') && (item.width > 60 || item.height > 60)
+  );
+  if (oversizeGeneral) amount += 150;
+  if (oversizeLiteKitLouver) amount += 150;
+  return { amount, freight: false, oversizeGeneral, oversizeLiteKitLouver };
 }
 
 function renderLineItems() {
@@ -771,18 +802,30 @@ function renderLineItems() {
   subtotalSpan.textContent = `$${subtotal.toFixed(2)}`;
 
   const shippingChecked = document.getElementById('shipping-checkbox').checked;
+  const shippingNote = document.getElementById('shipping-note');
   let shipping = 0;
   if (shippingChecked) {
     shippingRow.style.display = '';
-    if (subtotal >= 2000) {
-      shipping = 0;
+    const est = computeShippingEstimate(subtotal);
+    shipping = est.amount;
+    if (est.freight) {
       shippingSpan.textContent = `Order Meets PP'D Freight — $0.00`;
+      shippingNote.style.display = 'none';
     } else {
-      shipping = Math.max(30, Math.round(subtotal * 0.10));
       shippingSpan.textContent = `$${shipping.toFixed(2)}`;
+      const notes = [];
+      if (est.oversizeGeneral) notes.push('+$150 oversize item surcharge (over 94")');
+      if (est.oversizeLiteKitLouver) notes.push('+$150 oversize Lite Kit/Louver surcharge (over 60")');
+      if (notes.length) {
+        shippingNote.textContent = `Includes ${notes.join(' and ')}.`;
+        shippingNote.style.display = '';
+      } else {
+        shippingNote.style.display = 'none';
+      }
     }
   } else {
     shippingRow.style.display = 'none';
+    shippingNote.style.display = 'none';
   }
 
   const grandTotal = subtotal + shipping;
@@ -829,6 +872,7 @@ function buildEmailText() {
     const lineTotal = (unitPrice * item.qty).toFixed(2);
     lines.push(`(Line ${idx + 1}) ${decodeEntities(item.description)}`);
     lines.push(`   List Price: $${item.listPrice.toFixed(2)} each`);
+    lines.push(`   Net Ea.: $${unitPrice.toFixed(2)}`);
     lines.push(`   Qty: ${item.qty} x $${unitPrice.toFixed(2)} = $${lineTotal}`);
     lines.push('');
   });
@@ -838,11 +882,14 @@ function buildEmailText() {
 
   let shipping = 0;
   if (document.getElementById('shipping-checkbox').checked) {
-    if (subtotal >= 2000) {
+    const est = computeShippingEstimate(subtotal);
+    shipping = est.amount;
+    if (est.freight) {
       lines.push(`Shipping Estimate: Order Meets PP'D Freight — $0.00`);
     } else {
-      shipping = Math.max(30, Math.round(subtotal * 0.10));
       lines.push(`Shipping Estimate: $${shipping.toFixed(2)}`);
+      if (est.oversizeGeneral) lines.push('   Includes +$150 oversize item surcharge (over 94")');
+      if (est.oversizeLiteKitLouver) lines.push('   Includes +$150 oversize Lite Kit/Louver surcharge (over 60")');
     }
   }
 
@@ -973,6 +1020,14 @@ function onProductChange() {
     document.getElementById('shipping3day-checkbox').checked = false;
   }
 
+  const torxRow = document.getElementById('torx-row');
+  if (product.category === 'Lite Kits' || product.category === 'Louvers') {
+    torxRow.style.display = 'flex';
+  } else {
+    torxRow.style.display = 'none';
+    document.getElementById('torx-checkbox').checked = false;
+  }
+
   const sizeRow = document.getElementById('size-row');
   const sizeSel = document.getElementById('size-select');
   const dimsRow = document.getElementById('dims-row');
@@ -1013,6 +1068,11 @@ function stcCost(width, height) {
 // Glazing Tape: $15 per sq. ft., rounded up to next whole sq. ft. — always included for Round Lite Kits
 function glazingTapeCost(width, height) {
   return Math.ceil((width * height) / 144) * 15;
+}
+
+// Torx Security Screws: $20 up to 24"x24", $40 over
+function torxCost(width, height) {
+  return (width <= 24 && height <= 24) ? 20 : 40;
 }
 
 function calculate() {
@@ -1084,6 +1144,18 @@ function calculate() {
           <span class="result-value" style="font-size:1rem">$${shipping3day.toFixed(2)}</span>
         </div>`;
     }
+    const torxEligible = product.category === 'Lite Kits' || product.category === 'Louvers';
+    const torxChecked = torxEligible && document.getElementById('torx-checkbox').checked;
+    let torxRow = '';
+    if (torxChecked) {
+      const torx = torxCost(sizeOpt.width, sizeOpt.height);
+      listPrice = +(listPrice + torx).toFixed(2);
+      torxRow = `
+        <div class="result-row">
+          <span class="result-label">Torx Security Screws</span>
+          <span class="result-value" style="font-size:1rem">$${torx.toFixed(2)}</span>
+        </div>`;
+    }
     let netRow = '';
     if (multiplier) {
       const net = (listPrice * multiplier).toFixed(2);
@@ -1095,8 +1167,11 @@ function calculate() {
     }
 
     currentLineItem = {
-      description: `${product.label}${finish && finish.key !== 'standard' ? ' &mdash; ' + finish.label : ''} &mdash; ${sizeOpt.label}${stcChecked ? ' + STC' : ''}${shipping3dayChecked ? ' + 3-Day Shipping' : ''}`,
-      listPrice: listPrice
+      description: `${product.label}${finish && finish.key !== 'standard' ? ' &mdash; ' + finish.label : ''} &mdash; ${sizeOpt.label}${stcChecked ? ' + STC' : ''}${shipping3dayChecked ? ' + 3-Day Shipping' : ''}${torxChecked ? ' + Torx Screws' : ''}`,
+      listPrice: listPrice,
+      width: sizeOpt.width,
+      height: sizeOpt.height,
+      category: product.category
     };
 
     resultDiv.innerHTML = `
@@ -1109,6 +1184,7 @@ function calculate() {
         ${glazingTapeRow}
         ${stcRow}
         ${shipping3dayRow}
+        ${torxRow}
         <div class="result-row">
           <span class="result-label">List Price</span>
           <span class="result-value">$${listPrice.toFixed(2)}</span>
@@ -1141,6 +1217,49 @@ function calculate() {
         <div class="result-label">Out of range</div>
         <div class="result-value">Width must be ${effMinW}&Prime;&ndash;${effMaxW}&Prime;, height ${effMinH}&Prime;&ndash;${effMaxH}&Prime;.</div>
       </div>`;
+    return;
+  }
+
+  if (product.sqftPricing) {
+    const sqft = Math.ceil((widthRaw * heightRaw) / 144);
+    const { flatUpTo, flatPrice, rate } = product.sqftPricing;
+    const listPrice = sqft <= flatUpTo ? flatPrice : +(sqft * rate).toFixed(2);
+
+    let netRow = '';
+    if (multiplier) {
+      const net = (listPrice * multiplier).toFixed(2);
+      netRow = `
+        <div class="result-row">
+          <span class="result-label">Net Price (&times;${multiplier})</span>
+          <span class="result-value net">$${net}</span>
+        </div>`;
+    }
+
+    currentLineItem = {
+      description: `${product.label} &mdash; ${widthRaw}&Prime; &times; ${heightRaw}&Prime;`,
+      listPrice: listPrice,
+      width: widthRaw,
+      height: heightRaw,
+      category: product.category
+    };
+
+    resultDiv.innerHTML = `
+      <div class="result-card">
+        <div class="result-row">
+          <span class="result-label">Size Entered</span>
+          <span class="result-value" style="font-size:1.1rem">${widthRaw}&Prime; W &times; ${heightRaw}&Prime; H</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Sq. Ft. (rounded up)</span>
+          <span class="result-value" style="font-size:1rem">${sqft}</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">List Price</span>
+          <span class="result-value">$${listPrice.toFixed(2)}</span>
+        </div>
+        ${netRow}
+      </div>
+      <button onclick="addLineItem()" style="margin-top:12px;padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:0.95rem;cursor:pointer;font-weight:600">+ Add to Running Total</button>`;
     return;
   }
 
@@ -1273,6 +1392,19 @@ function calculate() {
       </div>`;
   }
 
+  const torxEligible = product.category === 'Lite Kits' || product.category === 'Louvers';
+  const torxChecked = torxEligible && document.getElementById('torx-checkbox').checked;
+  let torxRow = '';
+  if (torxChecked) {
+    const torx = torxCost(widthSnapped, heightSnapped);
+    listPrice = +(listPrice + torx).toFixed(2);
+    torxRow = `
+      <div class="result-row">
+        <span class="result-label">Torx Security Screws</span>
+        <span class="result-value" style="font-size:1rem">$${torx.toFixed(2)}</span>
+      </div>`;
+  }
+
   let netRow = '';
   if (multiplier) {
     const net = (listPrice * multiplier).toFixed(2);
@@ -1290,10 +1422,14 @@ function calculate() {
   descBits.push(`${widthRaw}&Prime; &times; ${heightRaw}&Prime;`);
   if (stcChecked) descBits.push('STC');
   if (shipping3dayChecked) descBits.push('3-Day Shipping');
+  if (torxChecked) descBits.push('Torx Screws');
 
   currentLineItem = {
     description: descBits.join(' &mdash; '),
-    listPrice: listPrice
+    listPrice: listPrice,
+    width: widthRaw,
+    height: heightRaw,
+    category: product.category
   };
 
   resultDiv.innerHTML = `
@@ -1308,6 +1444,7 @@ function calculate() {
       ${glazingTapeRow}
       ${stcRow}
       ${shipping3dayRow}
+      ${torxRow}
       <div class="result-row">
         <span class="result-label">List Price</span>
         <span class="result-value">$${listPrice.toFixed(2)}</span>
