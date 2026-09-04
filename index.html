@@ -204,7 +204,14 @@
       <span class="result-label">Shipping Estimate</span>
       <span class="result-value" style="font-size:1rem" id="shipping-value">$0.00</span>
     </div>
-    <div id="shipping-note" class="note" style="display:none;margin-top:0"></div>
+    <div class="result-row" id="long-length-row" style="display:none">
+      <span class="result-label">Long Length Freight</span>
+      <span class="result-value" style="font-size:1rem" id="long-length-value">$0.00</span>
+    </div>
+    <div class="result-row" id="oversize-row" style="display:none">
+      <span class="result-label">Oversize Lites/Louvers</span>
+      <span class="result-value" style="font-size:1rem" id="oversize-value">$0.00</span>
+    </div>
     <div class="result-row" style="border-top:2px solid var(--border);margin-top:4px;padding-top:14px">
       <span class="result-label" style="font-size:1rem;font-weight:700;color:var(--text)">Grand Total</span>
       <span class="result-value net" id="grand-total">$0.00</span>
@@ -747,22 +754,22 @@ function lineItemUnitPrice(item, multiplier) {
 }
 
 // Shipping Estimate rules:
-// - Prepaid freight: subtotal >= $2500 waives shipping entirely
-// - Otherwise: 10% of subtotal, $40 minimum
-// - +$150 if any item's width or height exceeds 94"
-// - +$150 if any Lite Kit / Louver item's width or height exceeds 60"
+// - Prepaid freight: subtotal >= $2500 waives shipping entirely (including both surcharges below)
+// - Otherwise: base = 10% of subtotal, $40 minimum
+// - Long Length Freight: +$150 if any item's width or height exceeds 94"
+// - Oversize Lites/Louvers: +$150 if any Lite Kit / Louver item's width or height exceeds 60"
 function computeShippingEstimate(subtotal) {
   if (subtotal >= 2500) {
-    return { amount: 0, freight: true, oversizeGeneral: false, oversizeLiteKitLouver: false };
+    return { base: 0, longLengthFee: 0, oversizeFee: 0, amount: 0, freight: true };
   }
-  let amount = Math.max(40, Math.round(subtotal * 0.10));
+  const base = Math.max(40, Math.round(subtotal * 0.10));
   const oversizeGeneral = lineItems.some(item => item.width > 94 || item.height > 94);
   const oversizeLiteKitLouver = lineItems.some(item =>
     (item.category === 'Lite Kits' || item.category === 'Louvers') && (item.width > 60 || item.height > 60)
   );
-  if (oversizeGeneral) amount += 150;
-  if (oversizeLiteKitLouver) amount += 150;
-  return { amount, freight: false, oversizeGeneral, oversizeLiteKitLouver };
+  const longLengthFee = oversizeGeneral ? 150 : 0;
+  const oversizeFee = oversizeLiteKitLouver ? 150 : 0;
+  return { base, longLengthFee, oversizeFee, amount: base + longLengthFee + oversizeFee, freight: false };
 }
 
 function renderLineItems() {
@@ -772,6 +779,10 @@ function renderLineItems() {
   const subtotalSpan = document.getElementById('subtotal-value');
   const shippingRow = document.getElementById('shipping-row');
   const shippingSpan = document.getElementById('shipping-value');
+  const longLengthRow = document.getElementById('long-length-row');
+  const longLengthSpan = document.getElementById('long-length-value');
+  const oversizeRow = document.getElementById('oversize-row');
+  const oversizeSpan = document.getElementById('oversize-value');
   const grandTotalSpan = document.getElementById('grand-total');
 
   const multiplier = getCurrentMultiplier();
@@ -802,7 +813,6 @@ function renderLineItems() {
   subtotalSpan.textContent = `$${subtotal.toFixed(2)}`;
 
   const shippingChecked = document.getElementById('shipping-checkbox').checked;
-  const shippingNote = document.getElementById('shipping-note');
   let shipping = 0;
   if (shippingChecked) {
     shippingRow.style.display = '';
@@ -810,22 +820,27 @@ function renderLineItems() {
     shipping = est.amount;
     if (est.freight) {
       shippingSpan.textContent = `Order Meets PP'D Freight — $0.00`;
-      shippingNote.style.display = 'none';
+      longLengthRow.style.display = 'none';
+      oversizeRow.style.display = 'none';
     } else {
-      shippingSpan.textContent = `$${shipping.toFixed(2)}`;
-      const notes = [];
-      if (est.oversizeGeneral) notes.push('+$150 oversize item surcharge (over 94")');
-      if (est.oversizeLiteKitLouver) notes.push('+$150 oversize Lite Kit/Louver surcharge (over 60")');
-      if (notes.length) {
-        shippingNote.textContent = `Includes ${notes.join(' and ')}.`;
-        shippingNote.style.display = '';
+      shippingSpan.textContent = `$${est.base.toFixed(2)}`;
+      if (est.longLengthFee) {
+        longLengthSpan.textContent = `$${est.longLengthFee.toFixed(2)}`;
+        longLengthRow.style.display = '';
       } else {
-        shippingNote.style.display = 'none';
+        longLengthRow.style.display = 'none';
+      }
+      if (est.oversizeFee) {
+        oversizeSpan.textContent = `$${est.oversizeFee.toFixed(2)}`;
+        oversizeRow.style.display = '';
+      } else {
+        oversizeRow.style.display = 'none';
       }
     }
   } else {
     shippingRow.style.display = 'none';
-    shippingNote.style.display = 'none';
+    longLengthRow.style.display = 'none';
+    oversizeRow.style.display = 'none';
   }
 
   const grandTotal = subtotal + shipping;
@@ -887,9 +902,9 @@ function buildEmailText() {
     if (est.freight) {
       lines.push(`Shipping Estimate: Order Meets PP'D Freight — $0.00`);
     } else {
-      lines.push(`Shipping Estimate: $${shipping.toFixed(2)}`);
-      if (est.oversizeGeneral) lines.push('   Includes +$150 oversize item surcharge (over 94")');
-      if (est.oversizeLiteKitLouver) lines.push('   Includes +$150 oversize Lite Kit/Louver surcharge (over 60")');
+      lines.push(`Shipping Estimate: $${est.base.toFixed(2)}`);
+      if (est.longLengthFee) lines.push(`Long Length Freight: $${est.longLengthFee.toFixed(2)}`);
+      if (est.oversizeFee) lines.push(`Oversize Lites/Louvers: $${est.oversizeFee.toFixed(2)}`);
     }
   }
 
