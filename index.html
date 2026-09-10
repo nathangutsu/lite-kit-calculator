@@ -212,6 +212,10 @@
       <span class="result-label">Oversize Lites/Louvers</span>
       <span class="result-value" style="font-size:1rem" id="oversize-value">$0.00</span>
     </div>
+    <div class="result-row" id="glass-packaging-row" style="display:none">
+      <span class="result-label">Glass Packaging/Handling</span>
+      <span class="result-value" style="font-size:1rem" id="glass-packaging-value">$0.00</span>
+    </div>
     <div class="result-row" style="border-top:2px solid var(--border);margin-top:4px;padding-top:14px">
       <span class="result-label" style="font-size:1rem;font-weight:700;color:var(--text)">Grand Total</span>
       <span class="result-value net" id="grand-total">$0.00</span>
@@ -759,8 +763,12 @@ function lineItemUnitPrice(item, multiplier) {
 // - Long Length Freight: +$150 if any item's width or height exceeds 94"
 // - Oversize Lites/Louvers: +$150 if any Lite Kit / Louver item's width or height exceeds 60"
 function computeShippingEstimate(subtotal) {
+  // Glass Packaging/Handling: $200 flat when the order is glass-only. Not waived by prepaid freight.
+  const glassOnly = lineItems.length > 0 && lineItems.every(item => item.category === 'Glass');
+  const glassPackagingFee = glassOnly ? 200 : 0;
+
   if (subtotal >= 2500) {
-    return { base: 0, longLengthFee: 0, oversizeFee: 0, amount: 0, freight: true };
+    return { base: 0, longLengthFee: 0, oversizeFee: 0, glassPackagingFee, amount: glassPackagingFee, freight: true };
   }
   const base = Math.max(40, Math.round(subtotal * 0.10));
   const oversizeGeneral = lineItems.some(item => item.width > 94 || item.height > 94);
@@ -769,7 +777,11 @@ function computeShippingEstimate(subtotal) {
   );
   const longLengthFee = oversizeGeneral ? 150 : 0;
   const oversizeFee = oversizeLiteKitLouver ? 150 : 0;
-  return { base, longLengthFee, oversizeFee, amount: base + longLengthFee + oversizeFee, freight: false };
+  return {
+    base, longLengthFee, oversizeFee, glassPackagingFee,
+    amount: base + longLengthFee + oversizeFee + glassPackagingFee,
+    freight: false
+  };
 }
 
 function renderLineItems() {
@@ -783,6 +795,8 @@ function renderLineItems() {
   const longLengthSpan = document.getElementById('long-length-value');
   const oversizeRow = document.getElementById('oversize-row');
   const oversizeSpan = document.getElementById('oversize-value');
+  const glassPackagingRow = document.getElementById('glass-packaging-row');
+  const glassPackagingSpan = document.getElementById('glass-packaging-value');
   const grandTotalSpan = document.getElementById('grand-total');
 
   const multiplier = getCurrentMultiplier();
@@ -837,10 +851,17 @@ function renderLineItems() {
         oversizeRow.style.display = 'none';
       }
     }
+    if (est.glassPackagingFee) {
+      glassPackagingSpan.textContent = `$${est.glassPackagingFee.toFixed(2)}`;
+      glassPackagingRow.style.display = '';
+    } else {
+      glassPackagingRow.style.display = 'none';
+    }
   } else {
     shippingRow.style.display = 'none';
     longLengthRow.style.display = 'none';
     oversizeRow.style.display = 'none';
+    glassPackagingRow.style.display = 'none';
   }
 
   const grandTotal = subtotal + shipping;
@@ -887,7 +908,7 @@ function buildEmailText() {
     const lineTotal = (unitPrice * item.qty).toFixed(2);
     lines.push(`(Line ${idx + 1}) ${decodeEntities(item.description)}`);
     lines.push(`   List Price: $${item.listPrice.toFixed(2)} each`);
-    lines.push(`   Net Ea.: $${unitPrice.toFixed(2)}`);
+    lines.push(`   Net Ea.: $${unitPrice.toFixed(2)}${multiplier ? ` (x${multiplier})` : ''}`);
     lines.push(`   Qty: ${item.qty} x $${unitPrice.toFixed(2)} = $${lineTotal}`);
     lines.push('');
   });
@@ -906,13 +927,13 @@ function buildEmailText() {
       if (est.longLengthFee) lines.push(`Long Length Freight: $${est.longLengthFee.toFixed(2)}`);
       if (est.oversizeFee) lines.push(`Oversize Lites/Louvers: $${est.oversizeFee.toFixed(2)}`);
     }
+    if (est.glassPackagingFee) lines.push(`Glass Packaging/Handling: $${est.glassPackagingFee.toFixed(2)}`);
   }
 
   lines.push(`Grand Total: $${(subtotal + shipping).toFixed(2)}`);
 
   lines.push('');
-  lines.push('Not NGP company quote.');
-  lines.push("Based on today's date using: June 8, 2026 Price List");
+  lines.push("Pricing based on today's date using: June 8, 2026 Price List");
   lines.push('Based on current buy program and freight terms');
 
   return lines.join('\n');
