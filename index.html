@@ -908,7 +908,7 @@ function buildEmailText() {
     const lineTotal = (unitPrice * item.qty).toFixed(2);
     lines.push(`(Line ${idx + 1}) ${decodeEntities(item.description)}`);
     lines.push(`   List Price: $${item.listPrice.toFixed(2)} each`);
-    lines.push(`   Net Ea.: $${unitPrice.toFixed(2)}${multiplier ? ` (x${multiplier})` : ''}`);
+    lines.push(`   Net Ea.: $${unitPrice.toFixed(2)}${multiplier ? ` (@ ${multiplier})` : ''}`);
     lines.push(`   Qty: ${item.qty} x $${unitPrice.toFixed(2)} = $${lineTotal}`);
     lines.push('');
   });
