@@ -214,7 +214,7 @@
       <span class="result-value" style="font-size:1rem" id="long-length-value">$0.00</span>
     </div>
     <div class="result-row" id="oversize-row" style="display:none">
-      <span class="result-label">Oversize Lites/Louvers</span>
+      <span class="result-label">Oversize Lites/Louvers/Glass greater than 60"</span>
       <span class="result-value" style="font-size:1rem" id="oversize-value">$0.00</span>
     </div>
     <div class="result-row" id="glass-packaging-row" style="display:none">
@@ -769,25 +769,30 @@ function lineItemUnitPrice(item, multiplier) {
 }
 
 // Shipping Estimate rules:
-// - Prepaid freight: subtotal >= $2500 waives shipping entirely (including both surcharges below)
+// - Prepaid freight: subtotal >= $2500 waives the base shipping and Long Length Freight
 // - Otherwise: base = 10% of subtotal, $40 minimum
-// - Long Length Freight: +$150 if any item's width or height exceeds 94"
-// - Oversize Lites/Louvers: +$150 if any Lite Kit / Louver item's width or height exceeds 60"
+// - Long Length Freight: +$150 if any item outside Lite Kits/Louvers (i.e. Glass) exceeds 94" in width or height
+// - Oversize Lites/Louvers/Glass: +$150 if any Lite Kit, Louver or Glass item exceeds 60" in width or height.
+//   Never waived by prepaid freight.
+// - Glass Packaging/Handling: +$200 when the order is glass-only. Never waived by prepaid freight.
 function computeShippingEstimate(subtotal) {
-  // Glass Packaging/Handling: $200 flat when the order is glass-only. Not waived by prepaid freight.
   const glassOnly = lineItems.length > 0 && lineItems.every(item => item.category === 'Glass');
   const glassPackagingFee = glassOnly ? 200 : 0;
 
+  const oversize = lineItems.some(item =>
+    (item.category === 'Lite Kits' || item.category === 'Louvers' || item.category === 'Glass') &&
+    (item.width > 60 || item.height > 60)
+  );
+  const oversizeFee = oversize ? 150 : 0;
+
   if (subtotal >= 2500) {
-    return { base: 0, longLengthFee: 0, oversizeFee: 0, glassPackagingFee, amount: glassPackagingFee, freight: true };
+    return { base: 0, longLengthFee: 0, oversizeFee, glassPackagingFee, amount: oversizeFee + glassPackagingFee, freight: true };
   }
   const base = Math.max(40, Math.round(subtotal * 0.10));
-  const oversizeGeneral = lineItems.some(item => item.width > 94 || item.height > 94);
-  const oversizeLiteKitLouver = lineItems.some(item =>
-    (item.category === 'Lite Kits' || item.category === 'Louvers') && (item.width > 60 || item.height > 60)
+  const longLength = lineItems.some(item =>
+    item.category !== 'Lite Kits' && item.category !== 'Louvers' && (item.width > 94 || item.height > 94)
   );
-  const longLengthFee = oversizeGeneral ? 150 : 0;
-  const oversizeFee = oversizeLiteKitLouver ? 150 : 0;
+  const longLengthFee = longLength ? 150 : 0;
   return {
     base, longLengthFee, oversizeFee, glassPackagingFee,
     amount: base + longLengthFee + oversizeFee + glassPackagingFee,
@@ -846,7 +851,6 @@ function renderLineItems() {
     if (est.freight) {
       shippingSpan.textContent = `Order Meets PP'D Freight — $0.00`;
       longLengthRow.style.display = 'none';
-      oversizeRow.style.display = 'none';
     } else {
       shippingSpan.textContent = `$${est.base.toFixed(2)}`;
       if (est.longLengthFee) {
@@ -855,12 +859,12 @@ function renderLineItems() {
       } else {
         longLengthRow.style.display = 'none';
       }
-      if (est.oversizeFee) {
-        oversizeSpan.textContent = `$${est.oversizeFee.toFixed(2)}`;
-        oversizeRow.style.display = '';
-      } else {
-        oversizeRow.style.display = 'none';
-      }
+    }
+    if (est.oversizeFee) {
+      oversizeSpan.textContent = `$${est.oversizeFee.toFixed(2)}`;
+      oversizeRow.style.display = '';
+    } else {
+      oversizeRow.style.display = 'none';
     }
     if (est.glassPackagingFee) {
       glassPackagingSpan.textContent = `$${est.glassPackagingFee.toFixed(2)}`;
@@ -936,8 +940,8 @@ function buildEmailText() {
     } else {
       lines.push(`Shipping Estimate: $${est.base.toFixed(2)}`);
       if (est.longLengthFee) lines.push(`Long Length Freight: $${est.longLengthFee.toFixed(2)}`);
-      if (est.oversizeFee) lines.push(`Oversize Lites/Louvers: $${est.oversizeFee.toFixed(2)}`);
     }
+    if (est.oversizeFee) lines.push(`Oversize Lites/Louvers/Glass greater than 60": $${est.oversizeFee.toFixed(2)}`);
     if (est.glassPackagingFee) lines.push(`Glass Packaging/Handling: $${est.glassPackagingFee.toFixed(2)}`);
   }
 
