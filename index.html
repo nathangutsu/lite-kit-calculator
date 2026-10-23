@@ -779,7 +779,9 @@ function getCurrentMultiplier() {
 }
 
 function lineItemUnitPrice(item, multiplier) {
-  return multiplier ? +(item.listPrice * multiplier).toFixed(2) : item.listPrice;
+  // The insect screen is stored apart from listPrice (so it can be shown as its own line) but is priced and discounted with the product.
+  const list = +(item.listPrice + (item.insectScreen || 0)).toFixed(2);
+  return multiplier ? +(list * multiplier).toFixed(2) : list;
 }
 
 // Shipping Estimate rules:
@@ -937,6 +939,10 @@ function buildEmailText() {
     const lineTotal = (unitPrice * item.qty).toFixed(2);
     lines.push(`(Line ${idx + 1}) ${decodeEntities(item.description)}`);
     lines.push(`   List Price: $${item.listPrice.toFixed(2)} each`);
+    if (item.insectScreen) {
+      lines.push(`   List: Non-removable Aluminum Insect Screen: $${item.insectScreen.toFixed(2)} each`);
+      lines.push(`   List Total: $${(item.listPrice + item.insectScreen).toFixed(2)}`);
+    }
     lines.push(`   Net Ea.: $${unitPrice.toFixed(2)}${multiplier ? ` (@ ${multiplier})` : ''}`);
     lines.push(`   Qty: ${item.qty} x $${unitPrice.toFixed(2)} = $${lineTotal}`);
     lines.push('');
@@ -1518,8 +1524,10 @@ function calculate() {
 
   const insectScreenChecked = product.insectScreen && document.getElementById('insect-screen-checkbox').checked;
   let insectScreenRow = '';
+  let insectScreenAmount = 0;
   if (insectScreenChecked) {
     const insectScreen = insectScreenCost(widthSnapped, heightSnapped);
+    insectScreenAmount = insectScreen;
     listPrice = +(listPrice + insectScreen).toFixed(2);
     insectScreenRow = `
       <div class="result-row">
@@ -1563,7 +1571,8 @@ function calculate() {
 
   currentLineItem = {
     description: descBits.join(' &mdash; '),
-    listPrice: listPrice,
+    listPrice: +(listPrice - insectScreenAmount).toFixed(2),
+    insectScreen: insectScreenAmount,
     width: widthRaw,
     height: heightRaw,
     category: product.category
