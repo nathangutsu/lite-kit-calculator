@@ -842,11 +842,11 @@ function renderLineItems() {
       const unitPrice = lineItemUnitPrice(item, multiplier);
       return `
       <div class="result-row">
-        <span class="result-label" style="max-width:45%">${item.description}<br>$${unitPrice.toFixed(2)} each${multiplier ? ` (net &times;${multiplier})` : ''}</span>
+        <span class="result-label" style="max-width:45%">${item.description}<br>${fmtMoney(unitPrice)} each${multiplier ? ` (net &times;${multiplier})` : ''}</span>
         <span class="result-value" style="font-size:1rem;display:flex;align-items:center;gap:10px">
           <input type="number" min="1" step="1" value="${item.qty}" onchange="updateQty(${idx}, this.value)"
             style="width:60px;padding:6px 8px;margin:0;font-size:0.9rem;text-align:center">
-          $${(unitPrice * item.qty).toFixed(2)}
+          ${fmtMoney((unitPrice * item.qty))}
           <button onclick="removeLineItem(${idx})" title="Remove"
             style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:0.9rem;line-height:1">&times;</button>
         </span>
@@ -856,7 +856,7 @@ function renderLineItems() {
 
   const subtotal = lineItems.reduce((sum, item) => sum + lineItemUnitPrice(item, multiplier) * item.qty, 0);
   subtotalRow.style.display = lineItems.length ? '' : 'none';
-  subtotalSpan.textContent = `$${subtotal.toFixed(2)}`;
+  subtotalSpan.textContent = `${fmtMoney(subtotal)}`;
 
   const shippingChecked = document.getElementById('shipping-checkbox').checked;
   let shipping = 0;
@@ -868,22 +868,22 @@ function renderLineItems() {
       shippingSpan.textContent = `Order Meets PP'D Freight — $0.00`;
       longLengthRow.style.display = 'none';
     } else {
-      shippingSpan.textContent = `$${est.base.toFixed(2)}`;
+      shippingSpan.textContent = `${fmtMoney(est.base)}`;
       if (est.longLengthFee) {
-        longLengthSpan.textContent = `$${est.longLengthFee.toFixed(2)}`;
+        longLengthSpan.textContent = `${fmtMoney(est.longLengthFee)}`;
         longLengthRow.style.display = '';
       } else {
         longLengthRow.style.display = 'none';
       }
     }
     if (est.oversizeFee) {
-      oversizeSpan.textContent = `$${est.oversizeFee.toFixed(2)}`;
+      oversizeSpan.textContent = `${fmtMoney(est.oversizeFee)}`;
       oversizeRow.style.display = '';
     } else {
       oversizeRow.style.display = 'none';
     }
     if (est.glassPackagingFee) {
-      glassPackagingSpan.textContent = `$${est.glassPackagingFee.toFixed(2)}`;
+      glassPackagingSpan.textContent = `${fmtMoney(est.glassPackagingFee)}`;
       glassPackagingRow.style.display = '';
     } else {
       glassPackagingRow.style.display = 'none';
@@ -896,7 +896,7 @@ function renderLineItems() {
   }
 
   const grandTotal = subtotal + shipping;
-  grandTotalSpan.textContent = `$${grandTotal.toFixed(2)}`;
+  grandTotalSpan.textContent = `${fmtMoney(grandTotal)}`;
 
   renderEmailText();
 }
@@ -929,6 +929,12 @@ function decodeEntities(html) {
   return el.value;
 }
 
+// Dollar amount with thousands separators, e.g. $2,000.00 (cents identical to toFixed(2))
+function fmtMoney(n) {
+  const [whole, cents] = n.toFixed(2).split('.');
+  return '$' + whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + cents;
+}
+
 function buildEmailText() {
   if (lineItems.length === 0) return 'No items added yet.';
 
@@ -936,20 +942,20 @@ function buildEmailText() {
   const lines = [];
   lineItems.forEach((item, idx) => {
     const unitPrice = lineItemUnitPrice(item, multiplier);
-    const lineTotal = (unitPrice * item.qty).toFixed(2);
+    const lineTotal = unitPrice * item.qty;
     lines.push(`(Line ${idx + 1}) ${decodeEntities(item.description)}`);
-    lines.push(`   List Price: $${item.listPrice.toFixed(2)} each`);
+    lines.push(`   List Price: ${fmtMoney(item.listPrice)} each`);
     if (item.insectScreen) {
-      lines.push(`   List: Non-removable Aluminum Insect Screen: $${item.insectScreen.toFixed(2)} each`);
-      lines.push(`   List Total: $${(item.listPrice + item.insectScreen).toFixed(2)}`);
+      lines.push(`   List: Non-removable Aluminum Insect Screen: ${fmtMoney(item.insectScreen)} each`);
+      lines.push(`   List Total: ${fmtMoney((item.listPrice + item.insectScreen))}`);
     }
-    lines.push(`   Net Ea.: $${unitPrice.toFixed(2)}${multiplier ? ` (@ ${multiplier})` : ''}`);
-    lines.push(`   Qty: ${item.qty} x $${unitPrice.toFixed(2)} = $${lineTotal}`);
+    lines.push(`   Net Ea.: ${fmtMoney(unitPrice)}${multiplier ? ` (@ ${multiplier})` : ''}`);
+    lines.push(`   Qty: ${item.qty} x ${fmtMoney(unitPrice)} = ${fmtMoney(lineTotal)}`);
     lines.push('');
   });
 
   const subtotal = lineItems.reduce((sum, item) => sum + lineItemUnitPrice(item, multiplier) * item.qty, 0);
-  lines.push(`Subtotal: $${subtotal.toFixed(2)}`);
+  lines.push(`Subtotal: ${fmtMoney(subtotal)}`);
 
   let shipping = 0;
   if (document.getElementById('shipping-checkbox').checked) {
@@ -958,14 +964,14 @@ function buildEmailText() {
     if (est.freight) {
       lines.push(`Shipping Estimate: Order Meets PP'D Freight — $0.00`);
     } else {
-      lines.push(`Shipping Estimate: $${est.base.toFixed(2)}`);
-      if (est.longLengthFee) lines.push(`Long Length Freight: $${est.longLengthFee.toFixed(2)}`);
+      lines.push(`Shipping Estimate: ${fmtMoney(est.base)}`);
+      if (est.longLengthFee) lines.push(`Long Length Freight: ${fmtMoney(est.longLengthFee)}`);
     }
-    if (est.oversizeFee) lines.push(`Oversize Lites/Louvers/Glass greater than 60": $${est.oversizeFee.toFixed(2)}`);
-    if (est.glassPackagingFee) lines.push(`Glass Packaging/Handling: $${est.glassPackagingFee.toFixed(2)}`);
+    if (est.oversizeFee) lines.push(`Oversize Lites/Louvers/Glass greater than 60": ${fmtMoney(est.oversizeFee)}`);
+    if (est.glassPackagingFee) lines.push(`Glass Packaging/Handling: ${fmtMoney(est.glassPackagingFee)}`);
   }
 
-  lines.push(`Grand Total: $${(subtotal + shipping).toFixed(2)}`);
+  lines.push(`Grand Total: ${fmtMoney((subtotal + shipping))}`);
 
   lines.push('');
   lines.push("Pricing based on today's date using: June 8, 2026 Price List (Rev. 9/7/26)");
@@ -1210,7 +1216,7 @@ function calculate() {
       glazingTapeRow = `
         <div class="result-row">
           <span class="result-label">Glazing Tape (+$15/sq. ft.)</span>
-          <span class="result-value" style="font-size:1rem">$${glazingTape.toFixed(2)}</span>
+          <span class="result-value" style="font-size:1rem">${fmtMoney(glazingTape)}</span>
         </div>`;
     }
 
@@ -1222,7 +1228,7 @@ function calculate() {
       stcRow = `
         <div class="result-row">
           <span class="result-label">STC Option (+$35/sq. ft.)</span>
-          <span class="result-value" style="font-size:1rem">$${stc.toFixed(2)}</span>
+          <span class="result-value" style="font-size:1rem">${fmtMoney(stc)}</span>
         </div>`;
     }
     const shipping3dayChecked = product.shipping3day && document.getElementById('shipping3day-checkbox').checked;
@@ -1233,7 +1239,7 @@ function calculate() {
       shipping3dayRow = `
         <div class="result-row">
           <span class="result-label">3-Day Shipping (+25%)</span>
-          <span class="result-value" style="font-size:1rem">$${shipping3day.toFixed(2)}</span>
+          <span class="result-value" style="font-size:1rem">${fmtMoney(shipping3day)}</span>
         </div>`;
     }
     const torxEligible = product.category === 'Lite Kits' || product.category === 'Louvers';
@@ -1245,7 +1251,7 @@ function calculate() {
       torxRow = `
         <div class="result-row">
           <span class="result-label">Torx Security Screws</span>
-          <span class="result-value" style="font-size:1rem">$${torx.toFixed(2)}</span>
+          <span class="result-value" style="font-size:1rem">${fmtMoney(torx)}</span>
         </div>`;
     }
     const glazingTapeOptionalChecked = product.glazingTapeOptional && document.getElementById('glazing-tape-optional-checkbox').checked;
@@ -1256,16 +1262,16 @@ function calculate() {
       glazingTapeOptionalRow = `
         <div class="result-row">
           <span class="result-label">Glazing Tape (+$15/sq. ft.)</span>
-          <span class="result-value" style="font-size:1rem">$${glazingTapeOptional.toFixed(2)}</span>
+          <span class="result-value" style="font-size:1rem">${fmtMoney(glazingTapeOptional)}</span>
         </div>`;
     }
     let netRow = '';
     if (multiplier) {
-      const net = (listPrice * multiplier).toFixed(2);
+      const net = listPrice * multiplier;
       netRow = `
         <div class="result-row">
           <span class="result-label">Net Price (&times;${multiplier})</span>
-          <span class="result-value net">$${net}</span>
+          <span class="result-value net">${fmtMoney(net)}</span>
         </div>`;
     }
 
@@ -1291,7 +1297,7 @@ function calculate() {
         ${glazingTapeOptionalRow}
         <div class="result-row">
           <span class="result-label">List Price</span>
-          <span class="result-value">$${listPrice.toFixed(2)}</span>
+          <span class="result-value">${fmtMoney(listPrice)}</span>
         </div>
         ${netRow}
       </div>
@@ -1337,17 +1343,17 @@ function calculate() {
       glazingTapeOptionalRow = `
         <div class="result-row">
           <span class="result-label">Glazing Tape (+$15/sq. ft.)</span>
-          <span class="result-value" style="font-size:1rem">$${glazingTapeOptional.toFixed(2)}</span>
+          <span class="result-value" style="font-size:1rem">${fmtMoney(glazingTapeOptional)}</span>
         </div>`;
     }
 
     let netRow = '';
     if (multiplier) {
-      const net = (listPrice * multiplier).toFixed(2);
+      const net = listPrice * multiplier;
       netRow = `
         <div class="result-row">
           <span class="result-label">Net Price (&times;${multiplier})</span>
-          <span class="result-value net">$${net}</span>
+          <span class="result-value net">${fmtMoney(net)}</span>
         </div>`;
     }
 
@@ -1372,7 +1378,7 @@ function calculate() {
         ${glazingTapeOptionalRow}
         <div class="result-row">
           <span class="result-label">List Price</span>
-          <span class="result-value">$${listPrice.toFixed(2)}</span>
+          <span class="result-value">${fmtMoney(listPrice)}</span>
         </div>
         ${netRow}
       </div>
@@ -1481,7 +1487,7 @@ function calculate() {
     glazingTapeRow = `
       <div class="result-row">
         <span class="result-label">Glazing Tape (+$15/sq. ft.)</span>
-        <span class="result-value" style="font-size:1rem">$${glazingTape.toFixed(2)}</span>
+        <span class="result-value" style="font-size:1rem">${fmtMoney(glazingTape)}</span>
       </div>`;
   }
 
@@ -1493,7 +1499,7 @@ function calculate() {
     stcRow = `
       <div class="result-row">
         <span class="result-label">STC Option (+$35/sq. ft.)</span>
-        <span class="result-value" style="font-size:1rem">$${stc.toFixed(2)}</span>
+        <span class="result-value" style="font-size:1rem">${fmtMoney(stc)}</span>
       </div>`;
   }
 
@@ -1505,7 +1511,7 @@ function calculate() {
     shipping3dayRow = `
       <div class="result-row">
         <span class="result-label">3-Day Shipping (+25%)</span>
-        <span class="result-value" style="font-size:1rem">$${shipping3day.toFixed(2)}</span>
+        <span class="result-value" style="font-size:1rem">${fmtMoney(shipping3day)}</span>
       </div>`;
   }
 
@@ -1518,7 +1524,7 @@ function calculate() {
     torxRow = `
       <div class="result-row">
         <span class="result-label">Torx Security Screws</span>
-        <span class="result-value" style="font-size:1rem">$${torx.toFixed(2)}</span>
+        <span class="result-value" style="font-size:1rem">${fmtMoney(torx)}</span>
       </div>`;
   }
 
@@ -1532,7 +1538,7 @@ function calculate() {
     insectScreenRow = `
       <div class="result-row">
         <span class="result-label">Non-removable Aluminum Insect Screen (+$22/sq. ft.)</span>
-        <span class="result-value" style="font-size:1rem">$${insectScreen.toFixed(2)}</span>
+        <span class="result-value" style="font-size:1rem">${fmtMoney(insectScreen)}</span>
       </div>`;
   }
 
@@ -1544,17 +1550,17 @@ function calculate() {
     glazingTapeOptionalRow = `
       <div class="result-row">
         <span class="result-label">Glazing Tape (+$15/sq. ft.)</span>
-        <span class="result-value" style="font-size:1rem">$${glazingTapeOptional.toFixed(2)}</span>
+        <span class="result-value" style="font-size:1rem">${fmtMoney(glazingTapeOptional)}</span>
       </div>`;
   }
 
   let netRow = '';
   if (multiplier) {
-    const net = (listPrice * multiplier).toFixed(2);
+    const net = listPrice * multiplier;
     netRow = `
       <div class="result-row">
         <span class="result-label">Net Price (&times;${multiplier})</span>
-        <span class="result-value net">$${net}</span>
+        <span class="result-value net">${fmtMoney(net)}</span>
       </div>`;
   }
 
@@ -1595,7 +1601,7 @@ function calculate() {
       ${glazingTapeOptionalRow}
       <div class="result-row">
         <span class="result-label">List Price</span>
-        <span class="result-value">$${listPrice.toFixed(2)}</span>
+        <span class="result-value">${fmtMoney(listPrice)}</span>
       </div>
       ${netRow}
     </div>
